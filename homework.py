@@ -1,4 +1,5 @@
 import logging
+import signal
 import sys
 import time
 from http import HTTPStatus
@@ -6,7 +7,6 @@ from http import HTTPStatus
 import requests
 import telegram
 from dotenv import load_dotenv
-from telegram.ext import Updater
 
 from config import PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 from exceptions import ParseStatusError, ApiAnswerError
@@ -91,13 +91,20 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверка доступности переменных окружения."""
-    TOKENS_CHAT_FOR_TELEGRAM = PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
+    TOKENS_CHAT_FOR_TELEGRAM = (
+        PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
     for token in TOKENS_CHAT_FOR_TELEGRAM:
         if token is None:
             logger.critical(
                 'Отсутствует обязательная переменная окружения: '
                 f'"{token}"!')
     return all(TOKENS_CHAT_FOR_TELEGRAM)
+
+
+def signal_handler(signal, frame):
+    """Обработчик сигнала SIGINT (нажатие клавиш ctrl + c)."""
+    print("Процесс остановлен пользователем")
+    sys.exit(0)
 
 
 def main():
@@ -123,9 +130,6 @@ def main():
                         send_message(bot, message)
             else:
                 logger.debug('Отсутствует ответ от API.')
-        except KeyboardInterrupt:
-            print('Остановка программы пользователем...')
-            break
         except Exception as error:
             logging.error(error)
             if error != message_error:
@@ -137,4 +141,5 @@ def main():
 
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, signal_handler)
     main()
