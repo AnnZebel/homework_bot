@@ -1,5 +1,4 @@
 import logging
-import signal
 import sys
 import time
 from http import HTTPStatus
@@ -46,8 +45,13 @@ def send_message(bot, message):
 def get_api_answer(timestamp):
     """Отправка запроса к эндпоинту API-сервиса."""
     params = {'from_date': timestamp}
+    requests_params = {
+        'url': ENDPOINT,
+        'headers': HEADERS,
+        'params': params
+    }
     try:
-        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+        response = requests.get(**requests_params)
         if response.status_code != HTTPStatus.OK:
             raise ApiAnswerError(f'Ошибка при запросе к API. Код ответа: '
                                  f'{response.status_code}')
@@ -101,12 +105,6 @@ def check_tokens():
     return all(TOKENS_CHAT_FOR_TELEGRAM)
 
 
-def signal_handler(signal, frame):
-    """Обработчик сигнала SIGINT (нажатие клавиш ctrl + c)."""
-    print("Процесс остановлен пользователем")
-    sys.exit(0)
-
-
 def main():
     """Основная логика работы бота."""
     if not check_tokens():
@@ -118,28 +116,28 @@ def main():
     while True:
         try:
             response = get_api_answer(current_timestamp)
-            current_timestamp = response.get('current_timestamp')
             homeworks = check_response(response)
             if not homeworks:
                 logging.debug('Статус домашней работы не изменился')
-            if response:
-                homework = response.get('homeworks', [])
-                if homework:
-                    message = parse_status(homework[0])
-                    if message:
-                        send_message(bot, message)
-            else:
-                logger.debug('Отсутствует ответ от API.')
+            homeworks = response.get('homeworks', [])
+            if homeworks:
+                message = parse_status(homeworks[0])
+                if message != message_error:
+                    send_message(bot, message)
+                    message_error = message
         except Exception as error:
             logging.error(error)
             if error != message_error:
                 logging.error(f'Сбой в работе программы: {error}')
-                send_message(bot, message)
+                send_message(bot, error)
                 message_error = error
         finally:
             time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
-    signal.signal(signal.SIGINT, signal_handler)
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Процесс остановлен пользователем")
+        sys.exit(0)
