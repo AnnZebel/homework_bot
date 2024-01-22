@@ -48,7 +48,8 @@ def get_api_answer(timestamp):
         raise ApiAnswerError(f'Ошибка при запросе к API: {e}')
 
     if response.status_code != HTTPStatus.OK:
-        raise requests.exceptions.RequestException
+        raise ApiAnswerError(f'Ошибка при запросе к API. Код ответа: '
+                             f'{response.status_code}')
     return response.json()
 
 
