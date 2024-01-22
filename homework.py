@@ -12,18 +12,15 @@ from exceptions import ParseStatusError, ApiAnswerError
 
 load_dotenv()
 
-
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-
 
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -44,21 +41,15 @@ def send_message(bot, message):
 
 def get_api_answer(timestamp):
     """Отправка запроса к эндпоинту API-сервиса."""
-    params = {'from_date': timestamp}
-    requests_params = {
-        'url': ENDPOINT,
-        'headers': HEADERS,
-        'params': params
-    }
     try:
-        response = requests.get(**requests_params)
-        if response.status_code != HTTPStatus.OK:
-            raise ApiAnswerError(f'Ошибка при запросе к API. Код ответа: '
-                                 f'{response.status_code}')
-        response = response.json()
-        return response
+        response = requests.get(ENDPOINT, headers=HEADERS,
+                                params={'from_date': timestamp})
     except requests.exceptions.RequestException as e:
         raise ApiAnswerError(f'Ошибка при запросе к API: {e}')
+
+    if response.status_code != HTTPStatus.OK:
+        raise requests.exceptions.RequestException
+    return response.json()
 
 
 def check_response(response):
@@ -116,15 +107,16 @@ def main():
     while True:
         try:
             response = get_api_answer(current_timestamp)
-            homeworks = check_response(response)
-            if not homeworks:
-                logging.debug('Статус домашней работы не изменился')
+            check_response(response)
+            current_timestamp = response.get('current_date', current_timestamp)
             homeworks = response.get('homeworks', [])
             if homeworks:
                 message = parse_status(homeworks[0])
                 if message != message_error:
                     send_message(bot, message)
                     message_error = message
+            if not homeworks:
+                logging.debug('Статус домашней работы не изменился')
         except Exception as error:
             logging.error(error)
             if error != message_error:
@@ -139,5 +131,4 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print("Процесс остановлен пользователем")
-        sys.exit(0)
+        logging.info("Процесс остановлен пользователем")
